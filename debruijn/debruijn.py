@@ -243,9 +243,15 @@ def get_contigs(graph, starting_nodes, ending_nodes):
     for start in starting_nodes:
         for end in ending_nodes:
             paths_gen = nx.all_simple_paths(graph, start, end)
-            print(next(paths_gen))
-            break
-        break
+            sequence_str = None
+            for path in paths_gen:
+                sequence_str = path[0]
+                for j in path[1:]:
+                    sequence_str += j[len(path[0]) - 1:]
+                contigs.append((sequence_str, len(sequence_str)))
+
+    return contigs
+
 
 def save_contigs(contigs_list, output_file):
     """Write all contigs in fasta format
@@ -253,7 +259,14 @@ def save_contigs(contigs_list, output_file):
     :param contig_list: (list) List of [contiguous sequence and their length]
     :param output_file: (str) Path to the output file
     """
-    pass
+    with open(output_file, "w") as fasta_out:
+        to_write = ""
+        for i, (contig, length) in enumerate(contigs_list):
+            to_write += f">contig_{i} len={length}\n"
+            to_write += textwrap.fill(contig, width=80)
+            if i != len(contig) - 1:
+                to_write += "\n"
+        fasta_out.write(to_write)
 
 
 def draw_graph(graph, graphimg_file): # pragma: no cover
@@ -296,6 +309,8 @@ def main(): # pragma: no cover
     # Plot the graph
     if args.graphimg_file:
         draw_graph(graph, args.graphimg_file)
+    
+    print(f"Starting_nodes = {get_starting_nodes(graph)}")
 
 if __name__ == '__main__': # pragma: no cover
     main()
