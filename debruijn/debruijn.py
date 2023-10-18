@@ -138,7 +138,13 @@ def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    print(path_list)
+    print(graph.get_starting_nodes())
+    for node_1, node_2 in path_list:
+        G.remove_edge(node_1, node_2)
+    if delete_entry_node:
+        G.remove_nodes_from([i[0] for i in path_list])
+    if delete_sink_node:
+        G.remove_nodes_from([i[1] for i in path_list])
 
 
 def select_best_path(graph, path_list, path_length, weight_avg_list, 
@@ -204,7 +210,13 @@ def get_starting_nodes(graph):
     :param graph: (nx.DiGraph) A directed graph object
     :return: (list) A list of all nodes without predecessors
     """
-    pass
+    no_predecessors = []
+    for node in graph:
+        predecessors_list = list(graph.predecessors(node))
+        if len(predecessors_list) == 0:
+            no_predecessors.append(node)
+    return no_predecessors
+
 
 def get_sink_nodes(graph):
     """Get nodes without successors
@@ -212,7 +224,12 @@ def get_sink_nodes(graph):
     :param graph: (nx.DiGraph) A directed graph object
     :return: (list) A list of all nodes without successors
     """
-    pass
+    no_successors = []
+    for node in graph:
+        predecessors_list = list(graph.successors(node))
+        if len(predecessors_list) == 0:
+            no_successors.append(node)
+    return no_successors
 
 def get_contigs(graph, starting_nodes, ending_nodes):
     """Extract the contigs from the graph
@@ -222,7 +239,13 @@ def get_contigs(graph, starting_nodes, ending_nodes):
     :param ending_nodes: (list) A list of nodes without successors
     :return: (list) List of [contiguous sequence and their length]
     """
-    pass
+    contigs = []
+    for start in starting_nodes:
+        for end in ending_nodes:
+            paths_gen = nx.all_simple_paths(graph, start, end)
+            print(next(paths_gen))
+            break
+        break
 
 def save_contigs(contigs_list, output_file):
     """Write all contigs in fasta format
@@ -265,15 +288,14 @@ def main(): # pragma: no cover
     """
     # Get arguments
     args = get_arguments()
-
+    kmer_dict = build_kmer_dict(args.fastq_file, args.kmer_size)
+    graph = build_graph(kmer_dict)
     # Fonctions de dessin du graphe
     # A decommenter si vous souhaitez visualiser un petit 
     # graphe
     # Plot the graph
-    # if args.graphimg_file:
-    #     draw_graph(graph, args.graphimg_file)
-    kmer_dict = {'GAG': 1, 'CAG': 1, 'AGA': 2, 'TCA': 1}
-    build_graph(kmer_dict)
+    if args.graphimg_file:
+        draw_graph(graph, args.graphimg_file)
 
 if __name__ == '__main__': # pragma: no cover
     main()
