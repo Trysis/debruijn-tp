@@ -81,7 +81,13 @@ def read_fastq(fastq_file):
     :param fastq_file: (str) Path to the fastq file.
     :return: A generator object that iterate the read sequences. 
     """
-    pass
+    with open(fastq_file, "r") as fastq_in:
+        iterator = iter(fastq_in)
+        while(next(iterator, None)):
+            sequence = next(fastq_in)
+            yield sequence.strip()
+            next(fastq_in)
+            next(fastq_in)
 
 
 def cut_kmer(read, kmer_size):
@@ -90,7 +96,8 @@ def cut_kmer(read, kmer_size):
     :param read: (str) Sequence of a read.
     :return: A generator object that iterate the kmers of of size kmer_size.
     """
-    pass
+    for i in range(len(read) - kmer_size + 1):
+        yield read[i: i + kmer_size]
 
 
 def build_kmer_dict(fastq_file, kmer_size):
@@ -99,7 +106,12 @@ def build_kmer_dict(fastq_file, kmer_size):
     :param fastq_file: (str) Path to the fastq file.
     :return: A dictionnary object that identify all kmer occurrences.
     """
-    pass
+    kmer_dict = dict()
+    for sequence in read_fastq(fastq_file):
+        for kmer in cut_kmer(sequence, kmer_size):
+            kmer_dict[kmer] = kmer_dict.get(kmer, 0) + 1
+
+    return kmer_dict
 
 
 def build_graph(kmer_dict):
@@ -108,7 +120,12 @@ def build_graph(kmer_dict):
     :param kmer_dict: A dictionnary object that identify all kmer occurrences.
     :return: A directed graph (nx) of all kmer substring and weight (occurrence).
     """
-    pass
+    G = nx.DiGraph()
+    kmer_items = list(kmer_dict.items())
+    for i, (key_i, value_i) in enumerate(kmer_items):
+        G.add_edge(key_i[:-1], key_i[1:], weight=len(key_i)-1)
+
+    return G
 
 
 def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
@@ -121,7 +138,7 @@ def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    print(path_list)
 
 
 def select_best_path(graph, path_list, path_length, weight_avg_list, 
@@ -255,7 +272,8 @@ def main(): # pragma: no cover
     # Plot the graph
     # if args.graphimg_file:
     #     draw_graph(graph, args.graphimg_file)
-
+    kmer_dict = {'GAG': 1, 'CAG': 1, 'AGA': 2, 'TCA': 1}
+    build_graph(kmer_dict)
 
 if __name__ == '__main__': # pragma: no cover
     main()
