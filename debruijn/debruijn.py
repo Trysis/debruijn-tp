@@ -27,13 +27,13 @@ import textwrap
 import matplotlib.pyplot as plt
 matplotlib.use("Agg")
 
-__author__ = "Your Name"
+__author__ = "Roude JEAN MARIE"
 __copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__credits__ = ["Roude JEAN MARIE"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__maintainer__ = "Roude JEAN MARIE"
+__email__ = "roude.etu@gmail.com"
 __status__ = "Developpement"
 
 def isfile(path): # pragma: no cover
@@ -123,7 +123,7 @@ def build_graph(kmer_dict):
     G = nx.DiGraph()
     kmer_items = list(kmer_dict.items())
     for i, (key_i, value_i) in enumerate(kmer_items):
-        G.add_edge(key_i[:-1], key_i[1:], weight=len(key_i)-1)
+        G.add_edge(key_i[:-1], key_i[1:], weight=value_i)
 
     return G
 
@@ -138,13 +138,18 @@ def remove_paths(graph, path_list, delete_entry_node, delete_sink_node):
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    print(graph.get_starting_nodes())
-    for node_1, node_2 in path_list:
-        G.remove_edge(node_1, node_2)
+    for path in path_list:
+        for i in range(len(path) - 1):
+            graph.remove_edge(path[i], path[i+1])
+
     if delete_entry_node:
-        G.remove_nodes_from([i[0] for i in path_list])
+        graph.remove_nodes_from([i[0] for i in path_list])
     if delete_sink_node:
-        G.remove_nodes_from([i[1] for i in path_list])
+        graph.remove_nodes_from([i[-1] for i in path_list])
+    # Removes isolated nodes
+    graph.remove_nodes_from(list(nx.isolates(graph)))
+
+    return graph
 
 
 def select_best_path(graph, path_list, path_length, weight_avg_list, 
@@ -159,7 +164,25 @@ def select_best_path(graph, path_list, path_length, weight_avg_list,
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    if len(path_list) == 1:
+        return graph
+
+    path_list_ = path_list
+    std_weight = statistics.stdev(weight_avg_list)
+    std_length = statistics.stdev(path_length)
+    selected_path_index = -1
+    if std_weight > 0:
+        selected_path_index = weight_avg_list.index(max(weight_avg_list))
+    elif std_length > 0:
+        selected_path_index = path_length.index(max(path_length))
+    else:
+        selected_path_index = randint(0, len(path_list) - 1)
+
+    # Keep paths to remove
+    path_list_.pop(selected_path_index)
+    graph = remove_paths(graph, path_list_, delete_entry_node, delete_sink_node)
+    return graph
+    
 
 def path_average_weight(graph, path):
     """Compute the weight of a path
@@ -170,6 +193,7 @@ def path_average_weight(graph, path):
     """
     return statistics.mean([d["weight"] for (u, v, d) in graph.subgraph(path).edges(data=True)])
 
+
 def solve_bubble(graph, ancestor_node, descendant_node):
     """Explore and solve bubble issue
 
@@ -178,7 +202,11 @@ def solve_bubble(graph, ancestor_node, descendant_node):
     :param descendant_node: (str) A downstream node in the graph
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    all_paths = list(nx.all_simple_paths(graph, ancestor_node, descendant_node))
+    all_weigths = [path_average_weight(graph, path) for path in all_paths]
+    all_length = [len(path)-1 for path in all_paths]
+    graph = select_best_path(graph, all_paths, all_length, all_weigths)
+    return graph
 
 def simplify_bubbles(graph):
     """Detect and explode bubbles
@@ -186,7 +214,25 @@ def simplify_bubbles(graph):
     :param graph: (nx.DiGraph) A directed graph object
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    bubble = False
+    noeud_descendant = None
+    noeud_ancetre = None
+    for node in graph:
+        node_predecc = list(graph.predecessors(node))
+        if len(node_predecc) > 1:
+            for i, node_i in enumerate(node_predecc):
+                for node_j in node_predecc[i + 1:]:
+                    noeud_ancetre = nx.lowest_common_ancestor(graph, node_i, node_j)
+                    if noeud_ancetre is not None:
+                        noeud_descendant = node
+                        bubble = True
+                        break
+                if bubble:
+                    break
+    if bubble:
+        graph = simplify_bubbles(solve_bubble(graph, noeud_ancetre, noeud_descendant))
+
+    return graph
 
 def solve_entry_tips(graph, starting_nodes):
     """Remove entry tips
@@ -194,7 +240,22 @@ def solve_entry_tips(graph, starting_nodes):
     :param graph: (nx.DiGraph) A directed graph object
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    for node in graph:
+        node_predecc = list(graph.predecessors(node))
+        if len(node_predecc) > 1:
+            paths = [list(nx.all_simple_paths(graph, node_start_i, node))\
+                     for node_start_i in starting_nodes]
+            paths = [path[0] for path in paths if len(path) > 0]
+            lengths = [len(path) - 1 for path in paths]
+            weights = [path_average_weight(graph, path) if lengths[i] > 1 else \
+                       graph.get_edge_data(*path)["weight"]
+                       for i, path in enumerate(paths)]
+
+            graph = select_best_path(graph, paths, lengths, weights, 
+                                     delete_entry_node=True, delete_sink_node=False)
+            graph = solve_entry_tips(graph, starting_nodes)
+            break
+    return graph
 
 def solve_out_tips(graph, ending_nodes):
     """Remove out tips
@@ -303,6 +364,9 @@ def main(): # pragma: no cover
     args = get_arguments()
     kmer_dict = build_kmer_dict(args.fastq_file, args.kmer_size)
     graph = build_graph(kmer_dict)
+    start = starting_nodes()
+    end = ending_nodes()
+    contigs = get_contigs()
     # Fonctions de dessin du graphe
     # A decommenter si vous souhaitez visualiser un petit 
     # graphe
