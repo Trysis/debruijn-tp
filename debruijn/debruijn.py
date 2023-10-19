@@ -255,6 +255,7 @@ def solve_entry_tips(graph, starting_nodes):
                                      delete_entry_node=True, delete_sink_node=False)
             graph = solve_entry_tips(graph, starting_nodes)
             break
+
     return graph
 
 def solve_out_tips(graph, ending_nodes):
@@ -263,7 +264,23 @@ def solve_out_tips(graph, ending_nodes):
     :param graph: (nx.DiGraph) A directed graph object
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    for node in graph:
+        node_success = list(graph.successors(node))
+        if len(node_success) > 1:
+            paths = [list(nx.all_simple_paths(graph, node, node_end_i))\
+                     for node_end_i in ending_nodes]
+            paths = [path[0] for path in paths if len(path) > 0]
+            lengths = [len(path) - 1 for path in paths]
+            weights = [path_average_weight(graph, path) if lengths[i] > 1 else \
+                       graph.get_edge_data(*path)["weight"]
+                       for i, path in enumerate(paths)]
+
+            graph = select_best_path(graph, paths, lengths, weights, 
+                                     delete_entry_node=False, delete_sink_node=True)
+            graph = solve_out_tips(graph, ending_nodes)
+            break
+
+    return graph
 
 def get_starting_nodes(graph):
     """Get nodes without predecessors
@@ -364,9 +381,11 @@ def main(): # pragma: no cover
     args = get_arguments()
     kmer_dict = build_kmer_dict(args.fastq_file, args.kmer_size)
     graph = build_graph(kmer_dict)
-    start = starting_nodes()
-    end = ending_nodes()
-    contigs = get_contigs()
+    graph = simplify_bubbles(graph)
+    graph = solve_entry_tips(graph, get_starting_nodes(graph))
+    graph = solve_out_tips(graph, get_sink_nodes(graph))
+    contigs = get_contigs(graph, get_starting_nodes(graph), get_sink_nodes(graph))
+    save_contigs(contigs, args.output_file)
     # Fonctions de dessin du graphe
     # A decommenter si vous souhaitez visualiser un petit 
     # graphe
@@ -374,7 +393,5 @@ def main(): # pragma: no cover
     if args.graphimg_file:
         draw_graph(graph, args.graphimg_file)
     
-    print(f"Starting_nodes = {get_starting_nodes(graph)}")
-
 if __name__ == '__main__': # pragma: no cover
     main()
